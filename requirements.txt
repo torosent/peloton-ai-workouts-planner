@@ -1,0 +1,7 @@
+langchain
+openai
+requests
+langchain_community
+langchain-openai
+python-multipart
+streamlit
