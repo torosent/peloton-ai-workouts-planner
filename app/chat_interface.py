@@ -108,7 +108,7 @@ def initialize_peloton_chat():
     4. Weekly time commitment
     You can make assumptions about the user equipment, time and workout types based on the user messages. For example, if the user mentions they have a bike, you can assume they are interested in cycling.
     Ask one question at a time. 
-    Respond ONLY with the JSON object when all data is collected. Do not include any additional text or explanations.
+    Respond ONLY with the JSON object in the following format when all data is collected. Do not include any additional text or explanations.
     {{
         "user_goals": "User's fitness goals",
         "weekly_time_commitment": "User's weekly time commitment",
@@ -140,7 +140,8 @@ def initialize_peloton_chat():
         with st.spinner('Thinking...'):
             response = st.session_state.conversation.invoke(prompt)["response"]
         
-        # Check if all parameters are collected
+        # Check if all parameters are collected and JSON object is returned
+        # TODO: Add more validation logic
             if "{" in response:
                 try:   
                 # Generate workout plan using existing logic
