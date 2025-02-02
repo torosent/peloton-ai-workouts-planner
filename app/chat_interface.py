@@ -199,7 +199,8 @@ def initialize_peloton_chat():
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔄 Modify Plan", use_container_width=True):
-                st.chat_message("assistant", "Would you like to modify the plan?")
+                with st.chat_message("assistant"):
+                    st.markdown("Would you like to modify the plan?")
 
                 # # Reset messages by removing the plan contents
                 # st.session_state.messages = [
