@@ -1,0 +1,10 @@
+# Python files
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+.venv/
+
+# VS Code settings
+.vscode/
+readme.md
+LICENSE

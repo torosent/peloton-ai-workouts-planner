@@ -5,3 +5,4 @@ langchain_community
 langchain-openai
 python-multipart
 streamlit
+streamlit-cookies-controller

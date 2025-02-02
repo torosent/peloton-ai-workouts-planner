@@ -33,15 +33,19 @@ def get_workout_prompt():
         """
     )
 
-def generate_workout_plan(user_input: str):
+def generate_workout_plan(username, password, user_input: str):
     """
     Generate a workout plan using Peloton API and GPT-4o.
     """
     
+    if username is None or password is None:
+        username=os.getenv("PELOTON_USERNAME")
+        password=os.getenv("PELOTON_PASSWORD")
+
     # Authenticate with Peloton API
     client = PelotonAPI(
-        username=os.getenv("PELOTON_USERNAME"),
-        password=os.getenv("PELOTON_PASSWORD")
+        username=username,
+        password=password
     )
     client.authenticate()
 
