@@ -64,7 +64,8 @@ def initialize_peloton_chat():
     # Configure the Streamlit page
     st.set_page_config(
         page_title="Peloton AI Workouts Planner",
-        page_icon="🚴‍♂️"
+        page_icon="🚴‍♂️",
+      #  layout="wide",
     )
 
     # Customized styling
@@ -100,37 +101,41 @@ def initialize_peloton_chat():
 
     # Initialize cookie controller for Peloton credentials
     controller = CookieController()
+
+    col1, col2 = st.columns([5,1])
+    with col1:
+        st.markdown('<h1 class="peloton-header">🚴‍♂️ AI Workouts Planner 🏃</h1>', unsafe_allow_html=True)
+    with col2:
+        if st.session_state.get('plan_generated') or controller.get('peloton-chat'):
+            if st.button("🚪 Log Out", use_container_width=True):
+                # Clear cookies and session state
+                controller.remove('peloton-chat')
+                st.session_state.messages = []
+                st.session_state.workout_params = {}
+                st.session_state.plan_generated = False
+                if 'workout_plan' in st.session_state:
+                    del st.session_state.workout_plan
+                st.rerun()
+                
     cookie = controller.get('peloton-chat')
 
-    # Prompt user for credentials if they're not available
-    if cookie is None:
-        st.markdown(
-            "### Please Enter Your Peloton Credentials. \n"
-            "**The credentials are required to access your Peloton data and are not stored on the server**"
-        )
+    if cookie is None or not cookie.get('username') or not cookie.get('password'):
+        # Show login form
+        st.markdown("### Please Enter Your Peloton Credentials. \n**The credentials are required to access your Peloton data and are not stored in the server**")
         username = st.text_input("Peloton Username")
         password = st.text_input("Peloton Password", type="password")
         if st.button("Submit and let's start planning!"):
-            # Set the cookie if both username and password are provided, or set empty if not
             if username and password:
-                controller.set(
-                    "peloton-chat",
-                    {"username": username, "password": password},
-                    secure=True,
-                    same_site='strict',
-                    max_age=3600
-                )
+                controller.set("peloton-chat", {"username": username, "password": password}, secure=True, same_site='strict', max_age=3600)
                 st.rerun()
             else:
-                controller.set(
-                    "peloton-chat",
-                    {"username": "", "password": ""},
-                    secure=True,
-                    same_site='strict',
-                    max_age=3600
-                )
+                st.error("Both username and password are required.")
         st.stop()
+    else:
+        username = cookie['username']
+        password = cookie['password']
 
+    # Skip login for testing
     username = None
     password = None
 
@@ -182,9 +187,6 @@ def initialize_peloton_chat():
     {history}
     Human: {input}
     Peloton AI Workouts Planner:"""
-
-    # Page header
-    st.markdown('<h1 class="peloton-header">🚴‍♂️ Peloton AI Workouts Planner 🏃</h1>', unsafe_allow_html=True)
 
     # Display past messages
     for message in st.session_state.messages:
