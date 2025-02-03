@@ -40,12 +40,13 @@ def parse_workout_plan(workout_plan):
     return response
 
 def save_workout_plan(workout_plan):
-    """Persist the workout plan (here, simply printing it)."""
+    """
+    Save or persist the user's final workout plan. TODO: Save to database
+    """
     print(workout_plan)
 
 # --- In-Memory Chat History via RunnableWithMessageHistory ---
-# We use ChatMessageHistory from langchain_community.
-from langchain_community.chat_message_histories import ChatMessageHistory  # pip install -U langchain-community
+from langchain_community.chat_message_histories import ChatMessageHistory
 
 if "global_history_store" not in st.session_state:
     st.session_state.global_history_store = {}
@@ -56,9 +57,11 @@ def get_session_history(session_id: str):
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
-# --- Main Interface using RunnableWithMessageHistory ---
+# Initialize the Peloton AI Workouts Planner with Streamlit
 def initialize_peloton_chat():
-
+    """
+    Save or persist the user's final workout plan. Currently, it just prints to the console.
+    """
     # Set page title and icon
     st.set_page_config(
         page_title="Peloton AI Workouts Planner",
@@ -159,7 +162,10 @@ def initialize_peloton_chat():
     # Display previous messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"], unsafe_allow_html=True)
+            if message["role"] == "assistant":
+                st.markdown(f'<div class="assistant-message">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(message["content"])
 
     # if st.session_state.get("plan_generated", False):
     #     col1, col2 = st.columns(2)
