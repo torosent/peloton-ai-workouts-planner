@@ -1,67 +1,65 @@
 import uuid
 import streamlit as st
 from streamlit_cookies_controller import CookieController
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
+
+# Project-specific imports:
 from services.llm import get_llm
 from services.planner import generate_workout_plan
 
-# Parse the workout plan
+# --- Helper Functions ---
+
 def parse_workout_plan(workout_plan):
     """
-    Parse the workout_plan (either a dict or another format) into a human-readable string
-    that can be displayed in the Streamlit UI.
+    Parse the workout_plan (dict or other format) into a human-readable string.
     """
-    # Initialize a default response
     response = ""
-
     if isinstance(workout_plan, dict):
         formatted_plan = "🎉 **Here's your personalized Peloton plan:**\n\n"
-        # Iterate through the workout plan dictionary by week
         for week_key in sorted(workout_plan.keys()):
             if week_key.startswith('week'):
                 formatted_plan += f"## 📅 {week_key.title()}\n\n"
-                # Iterate through each day within the week
                 for day in workout_plan[week_key]:
-                    date_str = day['day']
+                    date_str = day.get('day', 'Unknown day')
                     formatted_plan += f"### 🗓 {date_str}\n"
-                    # If no activities, mark it as a rest day
-                    if not day['activities']:
+                    if not day.get('activities'):
                         formatted_plan += "🛌 **Rest Day**\n\n"
                         continue
-                    # Display each activity
-                    for activity in day['activities']:
+                    for activity in day.get('activities', []):
                         formatted_plan += (
-                            f"#### 🏋️ {activity['title']}\n"
-                            f"- **Duration**: {activity['duration']} min\n"
-                            f"- **Instructor**: {activity['instructor']}\n"
-                            f"- **Intensity**: {activity['intensity']}\n"
-                            f"- **Description**: {activity['description']}\n"
-                            f"- [Take Class Now]({activity['url']})\n"
-                            f"- **Why This Workout**: {activity['extra_info']}\n\n"
+                            f"#### 🏋️ {activity.get('title', '')}\n"
+                            f"- **Duration**: {activity.get('duration', '')} min\n"
+                            f"- **Instructor**: {activity.get('instructor', '')}\n"
+                            f"- **Intensity**: {activity.get('intensity', '')}\n"
+                            f"- **Description**: {activity.get('description', '')}\n"
+                            f"- [Take Class Now]({activity.get('url', '')})\n"
+                            f"- **Why This Workout**: {activity.get('extra_info', '')}\n\n"
                         )
         response = formatted_plan
     else:
-        # If not a dict, provide a fallback message
         response += f"\n\nHere's your customized plan:\n{workout_plan}"
-
     return response
 
-# Save the workout plan
 def save_workout_plan(workout_plan):
-    """
-    Save or persist the user's final workout plan. Currently, it just prints to the console.
-    """
+    """Persist the workout plan (here, simply printing it)."""
     print(workout_plan)
 
-# Initialize the Peloton AI Workouts Planner with Streamlit
-def initialize_peloton_chat():
-    """
-    Main function to initialize the Peloton AI Workouts Planner with Streamlit.
-    Handles user authentication, conversation, workout plan generation, and plan saving.
-    """
+# --- In-Memory Chat History via RunnableWithMessageHistory ---
+# We use ChatMessageHistory from langchain_community.
+from langchain_community.chat_message_histories import ChatMessageHistory  # pip install -U langchain-community
 
-    # Configure the Streamlit page
+if "global_history_store" not in st.session_state:
+    st.session_state.global_history_store = {}
+
+def get_session_history(session_id: str):
+    store = st.session_state.global_history_store
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
+# --- Main Interface using RunnableWithMessageHistory ---
+def initialize_peloton_chat():
+
+    # Set page title and icon
     st.set_page_config(
         page_title="Peloton AI Workouts Planner",
         page_icon="🚴‍♂️",
@@ -99,53 +97,12 @@ def initialize_peloton_chat():
     </style>
     """, unsafe_allow_html=True)
 
-    # Initialize cookie controller for Peloton credentials
-    controller = CookieController()
+    st.markdown('<h1 class="peloton-header">🚴‍♂️ AI Workouts Planner 🏃</h1>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns([5,1])
-    with col1:
-        st.markdown('<h1 class="peloton-header">🚴‍♂️ AI Workouts Planner 🏃</h1>', unsafe_allow_html=True)
-    with col2:
-        if st.session_state.get('plan_generated') or controller.get('peloton-chat'):
-            if st.button("🚪 Log Out", use_container_width=True):
-                # Clear cookies and session state
-                controller.remove('peloton-chat')
-                st.session_state.messages = []
-                st.session_state.workout_params = {}
-                st.session_state.plan_generated = False
-                if 'workout_plan' in st.session_state:
-                    del st.session_state.workout_plan
-                st.rerun()
-                
-    cookie = controller.get('peloton-chat')
-
-    if cookie is None or not cookie.get('username') or not cookie.get('password'):
-        # Show login form
-        st.markdown("### Please Enter Your Peloton Credentials. \n**The credentials are required to access your Peloton data and are not stored in the server**")
-        username = st.text_input("Peloton Username")
-        password = st.text_input("Peloton Password", type="password")
-        if st.button("Submit and let's start planning!"):
-            if username and password:
-                controller.set("peloton-chat", {"username": username, "password": password}, secure=True, same_site='strict', max_age=3600)
-                st.rerun()
-            else:
-                st.error("Both username and password are required.")
-        st.stop()
-    else:
-        username = cookie['username']
-        password = cookie['password']
-
-    # Skip login for testing
-    username = None
-    password = None
-
-    # Initialize session state for messages and plan data
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.workout_params = {}
         st.session_state.plan_generated = False
-
-        # Add initial greeting
         st.session_state.messages.append({
             "role": "assistant",
             "content": (
@@ -160,110 +117,88 @@ def initialize_peloton_chat():
             )
         })
 
-    # Use LangChain conversation with a conversation buffer memory
     if "conversation" not in st.session_state:
-        llm = get_llm(temperature=0.8)
-        memory = ConversationBufferMemory()
-        st.session_state.conversation = ConversationChain(llm=llm, memory=memory)
+        llm = get_llm(temperature=0.8).with_structured_output(method="json_mode")
+        # Define a prompt template.
+        # We escape the JSON keys with double curly braces so they are interpreted literally.
+        from langchain_core.prompts import ChatPromptTemplate
+        prompt_template = ChatPromptTemplate.from_template(
+            (
+                "You are Peloton AI chat bot. Your goal is to get data from the user to create personalized Peloton workout plans."
+                "The data will help create optimized workout schedules by another service based on their time commitment, goals, and equipment availability."
+                "Continue the conversation naturally. Ask follow-up questions to collect: "
+                "1. User's fitness goals (strength, endurance, weight loss)"
+                "2. Available Peloton equipment (bike, tread, weights)"
+                "3. Preferred workout types (cycling, running, strength, yoga)"
+                "4. Weekly time commitment\n"
+                "You can make assumptions about the user equipment, time and workout types based on the user messages. For example, if the user mentions they have a bike, you can assume they are interested in cycling.\n"
+                "Response format:\n"
+                "1. If you need more information, ask the user for it and respond with a JSON object\n"
+                '{{"content":...}}\n'
+                "2. When all information and data is collected, respond with a JSON object with keys:\n"
+                '{{"content":...,user_goals": ..., "weekly_time_commitment": ..., "suggested_activities": []}}\n\n'
+                "suggested_activities is a list of activities that the user can take (cycling, strength, yoga, running, rowing)\n"
+                "Current conversation history:\n{history}\n"
+                "Human: {input}\n"
+                "Peloton AI Workouts Planner:"
+            )
+        )
+        # Compose the chain as prompt_template | llm.
+        chain = prompt_template | llm
 
-        # Customize the prompt to specifically gather user data for Peloton plan generation
-        st.session_state.conversation.prompt.template = """You are Peloton AI chat bot. You goal is to get data from the user to create personalized Peloton workout plans.
-    The data will help create optimized workout schedules by another service based on their time commitment, goals, and equipment availability.
-    Start by asking about:
-    1. User's fitness goals (strength, endurance, weight loss)
-    2. Available Peloton equipment (bike, tread, weights)
-    3. Preferred workout types (cycling, running, strength, yoga)
-    4. Weekly time commitment
-    You can make assumptions about the user equipment, time and workout types based on the user messages. For example, if the user mentions they have a bike, you can assume they are interested in cycling.
-    Ask one question at a time. 
-    Respond ONLY with the JSON object in the following format when all data is collected. Do not include any additional text or explanations.
-    {{
-        "user_goals": "User's fitness goals",
-        "weekly_time_commitment": "User's weekly time commitment",
-        "suggested_activities": [] "array of suggested activities supported by Peloton such as cycling, running, strength, yoga"
-    }}
+        # Wrap the chain with RunnableWithMessageHistory.
+        from langchain_core.runnables.history import RunnableWithMessageHistory
+        st.session_state.conversation = RunnableWithMessageHistory(
+            chain,
+            get_session_history=get_session_history,
+            input_messages_key="input",
+            output_messages_key="content",
+            history_messages_key="history"
+        )
 
-    Current conversation:
-    {history}
-    Human: {input}
-    Peloton AI Workouts Planner:"""
-
-    # Display past messages
+    # Display previous messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            if message["role"] == "assistant":
-                st.markdown(f'<div class="assistant-message">{message["content"]}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(message["content"])
+            st.markdown(message["content"], unsafe_allow_html=True)
 
-    # If a plan was already generated, display option to modify or save
-    if st.session_state.get('plan_generated', False):
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Modify Plan", use_container_width=True):
-                with st.chat_message("assistant"):
-                    st.markdown("Would you like to modify the plan?")
+    # if st.session_state.get("plan_generated", False):
+    #     col1, col2 = st.columns(2)
+    #     with col1:
+    #         if st.button("🔄 Modify Plan", use_container_width=True):
+    #             with st.chat_message("assistant"):
+    #                 st.markdown("Would you like to modify the plan?")
+    #     with col2:
+    #         if st.button("💾 Save Plan", use_container_width=True):
+    #             save_workout_plan(st.session_state.workout_plan)
+    #             st.success("✅ Plan saved successfully!")
+    #             st.session_state.messages.append({
+    #                 "role": "assistant",
+    #                 "content": "Your plan has been saved! You can now modify it or start a new plan."
+    #             })
+    #             st.rerun()
 
-                # # Reset messages by removing the plan contents
-                # st.session_state.messages = [
-                #     msg for msg in st.session_state.messages
-                #     if not (
-                #         "personalized Peloton plan" in msg["content"]
-                #         or "Would you like to modify" in msg["content"]
-                #     )
-                # ]
-                # # Reset conversation chain and plan-generated flag
-                # llm = get_llm(temperature=0.8)
-                # memory = ConversationBufferMemory()
-                # st.session_state.conversation = ConversationChain(llm=llm, memory=memory)
-                # st.session_state.plan_generated = False
-                # st.rerun()
-
-        with col2:
-            if st.button("💾 Save Plan", use_container_width=True):
-                save_workout_plan(st.session_state.workout_plan)
-                st.success("✅ Plan saved successfully!")
-                # Append confirmation message
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": "Your plan has been saved! You can now modify it or start a new plan."
-                })
-                st.rerun()
-
-    # Chat input to capture new user prompts
-    if prompt := st.chat_input("What are your fitness goals?"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # Chat input: capture new messages
+    if prompt_text := st.chat_input("What are your fitness goals?"):
+        st.session_state.messages.append({"role": "user", "content": prompt_text})
         with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate assistant response
-        with st.spinner('Thinking...'):
-            response = st.session_state.conversation.invoke(prompt)["response"]
-
-            # Check if user data is collected in a JSON format
-            if "{" in response:
-                try:
-                    # Send user data to services.planner.generate_workout_plan
-                    workout_plan = generate_workout_plan(username, password, user_input=response)
-                    st.session_state.workout_plan = workout_plan
-                    parsed_response = parse_workout_plan(workout_plan)
-
-                    # Add final plan and confirmation prompt
-                    st.session_state.messages.extend([
-                        {"role": "assistant", "content": parsed_response},
-                        {"role": "assistant", "content": "Would you like to make any changes to this plan or save it?"}
-                    ])
-
-                    st.session_state.plan_generated = True
-                    st.rerun()
-
-                except Exception as e:
-                    error_msg = f"Error generating plan: {str(e)}"
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            st.markdown(prompt_text)
+        with st.spinner("Thinking..."):
+            result = st.session_state.conversation.invoke(
+                {"input": prompt_text},
+                config={"configurable": {"session_id": "default"}}
+            )
+            # Extract only the text from the result. If the result is a dict with a "content" key, use that.
+            if isinstance(result, dict) and "user_goals" not in result:
+                response_text = result["content"]
             else:
-                # If not JSON-like, simply append the response
-                st.session_state.messages.append({"role": "assistant", "content": response})
-                st.rerun()
+                workout_plan = generate_workout_plan(None, None, user_input=result)
+                st.session_state.workout_plan = workout_plan
+                response_text = parse_workout_plan(workout_plan)
+                response_text += "\n\nWould you like to save or modify the plan?"
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": response_text
+        })
+        st.rerun()
 
-# Run the initialization when this script is executed
 initialize_peloton_chat()

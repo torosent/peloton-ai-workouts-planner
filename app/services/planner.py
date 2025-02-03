@@ -1,7 +1,6 @@
 import datetime
 import json
 import os
-from langchain_openai import AzureChatOpenAI
 from langchain.prompts import PromptTemplate
 from services.peloton import PelotonAPI
 from services.llm import get_llm
@@ -33,7 +32,7 @@ def get_workout_prompt():
         """
     )
 
-def generate_workout_plan(username, password, user_input: str):
+def generate_workout_plan(username, password, user_input):
     """
     Generate a workout plan using Peloton API and GPT-4o.
     """
@@ -49,8 +48,7 @@ def generate_workout_plan(username, password, user_input: str):
     )
     client.authenticate()
 
-    user_input_json = json.loads(user_input.lower())
-    suggested_activities = user_input_json.get("suggested_activities", [])
+    suggested_activities = user_input.get("suggested_activities", [])
 
     instructors = {}
     workouts = []
