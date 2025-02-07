@@ -1,0 +1,25 @@
+.stApp {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: #ffffff;
+}
+.stChatInput input {
+    background-color: #333333 !important;
+    color: white !important;
+    border: 1px solid #4CAF50;
+}
+.st-bd {
+    background-color: #333333;
+}
+.peloton-header {
+    text-align: center;
+    padding: 20px;
+    font-size: 2.5em;
+    color: #4CAF50;
+    text-shadow: 2px 2px 4px #000000;
+}
+.assistant-message {
+    padding: 1.5rem;
+    border-radius: 15px;
+    background: rgba(44,83,100,0.9);
+    margin: 10px 0;
+}
