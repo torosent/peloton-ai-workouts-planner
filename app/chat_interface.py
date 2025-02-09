@@ -124,22 +124,6 @@ def initialize_peloton_chat():
             else:
                 st.markdown(message["content"])
 
-    # if st.session_state.get("plan_generated", False):
-    #     col1, col2 = st.columns(2)
-    #     with col1:
-    #         if st.button("🔄 Modify Plan", use_container_width=True):
-    #             with st.chat_message("assistant"):
-    #                 st.markdown("Would you like to modify the plan?")
-    #     with col2:
-    #         if st.button("💾 Save Plan", use_container_width=True):
-    #             save_workout_plan(st.session_state.workout_plan)
-    #             st.success("✅ Plan saved successfully!")
-    #             st.session_state.messages.append({
-    #                 "role": "assistant",
-    #                 "content": "Your plan has been saved! You can now modify it or start a new plan."
-    #             })
-    #             st.rerun()
-
     # Chat input: capture new messages
     if prompt_text := st.chat_input("What are your fitness goals?"):
         st.session_state.messages.append({"role": "user", "content": prompt_text})
@@ -151,17 +135,22 @@ def initialize_peloton_chat():
                 config={"configurable": {"session_id": "default"}}
             )
             # Extract only the text from the result. If the result is a dict with a "content" key, use that.
-            if  result["done_collecting"] == False:
+            if result["done_collecting"] == False:
                 response_text = result["content"]
             else:
                 workout_plan = generate_workout_plan(None, None, user_input=result)
                 st.session_state.workout_plan = workout_plan
                 response_text = parse_workout_plan(workout_plan)
-                response_text += "\n\nWould you like to save or modify the plan?"
         st.session_state.messages.append({
             "role": "assistant",
             "content": response_text
         })
+        # After displaying the workout plan, ask if the user wants to save or modify the plan.
+        if result["done_collecting"]:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": "Would you like to modify the plan?"
+            })
         st.rerun()
 
 initialize_peloton_chat()
